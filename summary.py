@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import jaconv
 import os
 import re
@@ -48,6 +49,8 @@ SUMMARY_INIT = {
     'last_update': ''
 }
 
+keywords_in_pdf = ['検査実施', '陽性者', '入院', '中等症', '重症', '退院', '死亡']
+
 
 def get_pdf(url: str) -> str:
     html_doc = requests.get(base_url + url).text
@@ -74,14 +77,10 @@ def get_pdf(url: str) -> str:
     return filename
 
 
-def get_numbers_in_text(text: str) -> List[int]:
-    return list(map(int, re.findall('[0-9]+', jaconv.z2h(text, digit=True))))
-
-
 class MainSummary:
     def __init__(self):
         self.summary = SUMMARY_INIT
-        self.values = []
+        self.values = [0 for key in keywords_in_pdf]
 
 
     def set_summary_values(self, obj) -> None:
@@ -98,13 +97,18 @@ class MainSummary:
         pdf_texts = extract_text(filename).split('\n')
 
         # Set summary values
-        content = ''.join(pdf_texts[3:])
-        self.values = get_numbers_in_text(content)
+        content = jaconv.z2h(''.join(pdf_texts[3:]), digit=True).replace('　', '')
+        key_vals = re.sub(r'(\d+)人', r'\1 ', content).split()
+        for key_val in key_vals:
+            for i, keyword in enumerate(keywords_in_pdf):
+                if keyword in key_val:
+                    self.values[i] = int(re.findall('\d+', key_val)[0])
+
         self.set_summary_values(self.summary)
 
         # Set last update
         caption = pdf_texts[0]
-        dt_vals = get_numbers_in_text(caption)
+        dt_vals = list(map(int, re.findall('\d+', jaconv.z2h(caption, digit=True))))
         last_update = datetime(datetime.now().year, dt_vals[0], dt_vals[1]) + timedelta(hours=dt_vals[2])
         self.summary['last_update'] = datetime.strftime(last_update, '%Y-%m-%dT%H:%M:%S+09:00')
 
